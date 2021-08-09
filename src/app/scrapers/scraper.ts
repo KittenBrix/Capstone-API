@@ -1,0 +1,1 @@
+// reusable components and methods for our scrapers, including generating a new window.
