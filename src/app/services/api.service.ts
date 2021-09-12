@@ -4,10 +4,11 @@ import { Handle } from '../common/types';
 export default class BaseService{
     static async HandleErrors(ctx: koa.Context, next: CallableFunction): Promise<void>{
         try {
-            ctx.status = 0;
+            // ctx.status = 0;
             await next();
         } catch (err){
-            ctx.status = ctx.status || 500;
+            console.log(err);
+            ctx.status = 500;
             ctx.body = `HandleErrors: ${err.message}`;
         }
     }
@@ -16,14 +17,17 @@ export default class BaseService{
         try {
             data = await next();
             if (data.err){
-                ctx.status = data.data;
-                ctx.body = data.msg;
+                console.log("handlehandles",data);
+                ctx.body = {data: data.data, msg: data.msg, status: ctx.status ?? 500};
             } else {
-                ctx.status = 200;
                 ctx.body = data.data;
             }
+            ctx.status = 200;
+
         } catch (err){
-            throw new Error(JSON.stringify(data));
+            console.log(err);
+            ctx.status = 500;
+            ctx.body = err.message;
         }
     }
 }

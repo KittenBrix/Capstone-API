@@ -1,9 +1,10 @@
 import * as mysql from 'mysql2/promise';
 import { Handle } from '../common/types';
-
+import * as dotenv from 'dotenv';
+dotenv.config();
 // provide a service to get a configured database connection.
 export class DatabaseService {
-    static readonly config = {
+    private static config = {
         host: process.env.DB_HOST,
         port: Number(process.env.DB_PORT),
         user: process.env.DB_USER,
@@ -14,7 +15,7 @@ export class DatabaseService {
     static async getPool(): Promise<mysql.Pool>{
         return await this.dbPool;
     }
-    static async getConnection(): Promise<mysql.Connection>{
+    static async getConnection(): Promise<mysql.PoolConnection>{
         const conn = await this.dbPool.getConnection();
         conn.config.namedPlaceholders = true;
         return conn;
@@ -26,12 +27,29 @@ export class DatabaseService {
         try{
             const res = await db.query(SQL,DATA);
             result.data = res;
+            await db.commit();
         }catch(err){
             result.err = true;
             result.msg = err.message;
         }finally{
-            await db.end();
+            await db.release();
         }
+        return result;
+    }
+
+    static async insert(table:string, content: any): Promise<Handle<any>>{
+        const data = await DatabaseService.execute(`describe ?`,[table]);
+        const fields: string[] = [];
+        const values: string[] = [];
+        const keys = Object.keys(content);
+        for (const field of data.data){
+            if (keys.includes(field.field)){
+                fields.push(field.field);
+                values.push(`:${field.field}`);
+            }
+        }
+        const SQL = `INSERT into ${table} (${fields.join(', ')}) VALUES (${values.join(', ')})`;
+        const result = await DatabaseService.execute(SQL, content);
         return result;
     }
 }

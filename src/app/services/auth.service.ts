@@ -5,42 +5,50 @@ import * as bcrypt from 'bcrypt';
 import { DatabaseService } from './db.service';
 import { LoggingService } from './logging.service';
 import { globalconfig } from '../common/config';
+import { PoolConnection } from 'mysql2/promise';
 export class AuthService {
 
     // generates a new token using login credentials.
-    static async getLoginToken(ctx: Koa.Context): Promise<Handle<string|number>>{
+    static async getLoginToken(ctx: Koa.Context): Promise<Handle<any>>{
         let status: number = 400;
         let msg: string = "Failed to authenticate";
         try{
-            const {userName, password} = ctx.body as any;
-            const hashedPassword = await bcrypt.hash(password, 10);
+            const {username: userName, password} = ctx.request.body as any;
             // determine if user and password match.
             const db = await DatabaseService.getConnection();
             const [possibleUsers] = (await db.query(`
-                SELECT * from appUsers where username = :username
+                SELECT * from appUsers where username like :userName
             `, {userName}) as any[]);
+            console.log("possible users",possibleUsers, `username`,userName);
             let user: any = null;
-            status = 404;
             msg = "Could not check database for user credentials"
             possibleUsers.forEach(async (element: any) => {
-                if (element && element.hashedpassword && hashedPassword == element.hashedpassword){
+                const match = bcrypt.compareSync(password,element.hashedpassword.toString());
+                // const hp = (element && element.hashedpassword) ? element.hashedpassword.toString(): '';
+                if (match){
                     user = element;
                 }
             });
+            
             status = 500;
             msg = "failed to sign found user object"
+            if (!user){
+                msg = "user not found"
+                throw new Error();
+            }
             const { id, username, firstname, lastname, roleid} = user;
             const payload = { id, username, firstname, lastname, roleid};
             const token = jwt.sign(payload, process.env.JWT_SECRET,globalconfig.jwtConfig);
             await LoggingService.logEvent("appUser",String(payload.id),"User logged in to app via login.","Login");
             return {
-                data: token,
+                data: {token},
                 err: false,
                 msg: "Successfully signed in."
             };
 
         }
         catch(err){
+            console.log(err);
             return {data:status,err:true,msg}
         }
     }
@@ -68,27 +76,27 @@ export class AuthService {
     }
     // for creating a new user
     static async registerNewUser(ctx: Koa.Context): Promise<Handle<string|number>>{
-        // TODO!!!! register a user, but only if the username has not already been used
-        // id, username, firstname, lastname, 
         const {username, firstname, lastname, password} = ctx.request.body as any;
         if (!(username && firstname && lastname && password)){
+            console.log("missing one of the 4 required credentials");
             throw new Error("Registration is missing a required field.");
         }
         let result: Handle<string|number> = {
             data: null,
             err: true,
             msg: "empty"
-        };
-        const db = await DatabaseService.getConnection();
+        }; 
+        const db: PoolConnection = await DatabaseService.getConnection();
         try {
             const [usernames] = await db.query(`SELECT username from appUsers where username = :username`,{username});
             if (usernames && (usernames as any).length){
+                console.log("username requested is in use.");
                 throw new Error("Username is in use. Request password reset?");
             }
             else {
-                const registrationSuccess = await this.registerUser(ctx.request.body);
+                const registrationSuccess = await AuthService.registerUser(ctx.request.body);
                 if (registrationSuccess){
-                    result = await this.getLoginToken(ctx);
+                    result = await AuthService.getLoginToken(ctx);
                 } else {
                     throw new Error("Could not register this user.");
                 }
@@ -97,7 +105,7 @@ export class AuthService {
             result.err = true;
             result.msg = err.message;
         } finally {
-            await db.end();
+            await db.release();
         }
         return result;
         
@@ -151,9 +159,10 @@ export class AuthService {
         }
         // hash password
         const hashedPassword = await bcrypt.hash(password, 10);
+        console.log(hashedPassword);
         const db = await DatabaseService.getConnection();
         const SQL = `INSERT into appUsers (username, hashedpassword, firstname, lastname, roleId ) VALUES
-        (:username, :hashedpassword, :firstname, :lastname, 1)`;
+        (:username, :hashedPassword, :firstname, :lastname, 1)`;
         try{
             const result = await db.query(SQL,{
                 username,
@@ -164,10 +173,10 @@ export class AuthService {
             await db.commit();
         }catch(err){
             console.log("error creating a user");
-            await db.end();
             throw err;
+        } finally {
+            await db.release();
         }
-        await db.end();
         return true;
     }
 

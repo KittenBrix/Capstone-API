@@ -11,7 +11,7 @@ export class LoggingService {
         } catch (err) {
             console.log(err.message);
         } finally {
-            await db.end();
+            await db.release();
         }
     }
 }

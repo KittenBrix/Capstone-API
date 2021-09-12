@@ -65,3 +65,12 @@ export interface Roles {
   roleid?:number,
   cohort?:number
 };
+
+export interface Submission {
+  id?: number,
+  userid?: number,
+  assignmentid?: number,
+  text?: string,
+  grade?: number,
+  pass?: boolean
+}
