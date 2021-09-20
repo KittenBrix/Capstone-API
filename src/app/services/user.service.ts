@@ -16,11 +16,11 @@ export class UserService {
             if (roleId > user.roleId) return true;  // if your site rank is higher than the individual, you can read it
             // now if they have a lower role than you in a cohort, return true as well.
             try{
-                const SQL1 = `SELECT roleid, cohort FROM appUserRoles where userid = ?`;
+                const SQL1 = `SELECT roleid, cohortid FROM appUserRoles where userid = ?`;
                 const accessorRoles = (await DatabaseService.execute(SQL1,[accessorId])).data;
                 const where = [];
                 for (const role of accessorRoles){
-                    where.push(`(roleid < ${role.roleid} AND cohort = ${role.cohort})`)
+                    where.push(`(roleid < ${role.roleid} AND cohortid = ${role.cohortid})`)
                 }
                 const SQL2 = `SELECT count(*) FROM appUserRoles where userid = ? AND (${where.join(' OR ')})`;
                 const hasSuperiority = Boolean((await DatabaseService.execute(SQL2,[userId])).data);
@@ -94,6 +94,7 @@ export class UserService {
         const result:Handle<boolean> = {data:false,err:true,msg:`Can't post object for user ${body.userid}`};
         console.log('postcontent',typing, ctx.user.id, body.userid);
         if (this.canAccess(ctx.user.id, body.userid,false)){
+            result.msg = `trying alteration for ${typing}`
             switch (typing){
                 case 'phone':
                     result.data = await this.addPhone(<Phone>body); break;
@@ -176,15 +177,15 @@ export class UserService {
         // return await DatabaseService.execute(`SELECT * from appUserRoles where userid = :userId`,{userId});
         let SQL = '';
         const inputs = [];
-        if (!(role.cohort && role.userid && role.roleid)){
+        if (!(role.cohortid && role.userid && role.roleid)){
             return false;
         }
         if (role.id){
-            SQL = `UPDATE appUserRoles set roleid = ?, cohort = ?, userid = ? WHERE id = ? `;
-            inputs.push(role.roleid, role.cohort, role.userid, role.id);
+            SQL = `UPDATE appUserRoles set roleid = ?, cohortid = ?, userid = ? WHERE id = ? `;
+            inputs.push(role.roleid, role.cohortid, role.userid, role.id);
         } else {
-            SQL = `INSERT INTO appUserRoles (roleid, cohort, userid) VALUES (?,?,?)`;
-            inputs.push(role.roleid, role.cohort, role.userid);
+            SQL = `INSERT INTO appUserRoles (roleid, cohortid, userid) VALUES (?,?,?)`;
+            inputs.push(role.roleid, role.cohortid, role.userid);
         }
         try {
             await DatabaseService.execute(SQL, inputs);

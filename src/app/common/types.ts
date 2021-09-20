@@ -66,7 +66,7 @@ export interface Roles {
   id?: number,
   userid?:number,
   roleid?:number,
-  cohort?:number
+  cohortid?:number
 };
 
 export interface Submission {
