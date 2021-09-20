@@ -52,18 +52,27 @@ export class UserService {
         return await this.canAccess(id, reqId, true);
     }
     // read content CTX methods for a router
-    static async readContent(ctx: Koa.Context, SQLLIST: string[], DATALIST: any[][], fields: string[] = []){
+    static async readContent(ctx: Koa.Context, SQLLIST: string[], DATALIST: any[][], fields: string[] = []): Promise<void>{
         let result: Handle<any> = {data: {}, err: false, msg:`Can't access content for user ${ctx.params.id} with given credentials`};
+        if (!this.canAccess(ctx.user.id,ctx.params.id,true)){
+            ctx.body = result;
+            return;
+        }
         operation: try{
             if (SQLLIST.length != DATALIST.length){
                 break operation;
             }
             const promises = [];
-            for (const index in SQLLIST) promises.push(DatabaseService.execute(SQLLIST[index],DATALIST[index]));
+            for (const index in SQLLIST){
+                promises.push(DatabaseService.execute(SQLLIST[index],DATALIST[index]));
+            }
+            
             const data = await Promise.all(promises);
+            result.msg = "";
             for (const index in data){
                 const handle = data[index];
                 const field = fields[index] ?? index;
+
                 result.data[field] = handle.data;
                 result.err = result.err || handle.err;
                 result.msg = handle.msg || result.msg;
@@ -74,13 +83,16 @@ export class UserService {
             result.msg = err.message;
             console.log(err);
         }
-        return result;
+        // console.log('readcontent',result);
+        ctx.body = result;
+        console.log('~~~~~~~~~~~~~~~\n',SQLLIST,result,'\n~~~~~~~~~~~~~~`');
     }
     // post content CTX methods for a router
-    static async postContent(ctx: Koa.Context, typing: string): Promise<Handle<boolean>>{
+    static async postContent(ctx: Koa.Context, typing: string): Promise<void>{
         const body:any = ctx.request.body;
         body.userid = ctx.params.id
         const result:Handle<boolean> = {data:false,err:true,msg:`Can't post object for user ${body.userid}`};
+        console.log('postcontent',typing, ctx.user.id, body.userid);
         if (this.canAccess(ctx.user.id, body.userid,false)){
             switch (typing){
                 case 'phone':
@@ -93,7 +105,7 @@ export class UserService {
                     result.data = await this.addSubmission(<Submission>body); break;
             }
         }
-        return result;
+        ctx.body = result;
     }
     
 
@@ -204,33 +216,39 @@ export class UserService {
         }
     }
     static async addUserData(user: User, password: string): Promise<any> {
+        let data;
         if (user.id){
-            return await this.editUserData(user, password);
+            data = await this.editUserData(user, password);
+        } else {
+            const SQL = `INSERT INTO appUsers 
+            (username, firstname, lastname, classroomemail, primaryemail, clockifyemail, primaryphone, discordid, fcclink, roleId, active, hashedpassword) VALUES 
+            (?, ?, ?, ?, ?, ?, ?, ?)`;
+            const hashedpassword = bcrypt.hash(password, 10);
+            const values = [
+                user.username ?? null,
+                user.firstname ?? null,
+                user.lastname ?? null,
+                user.classroomemail ?? null,
+                user.primaryemail ?? null,
+                user.clockifyemail ?? null,
+                user.primaryphone ?? null,
+                user.discordid ?? null,
+                user.fcclink ?? null,
+                user.roleId ?? null,
+                user.active ?? null,
+                hashedpassword
+            ];
+            data = await DatabaseService.execute(SQL, values);
         }
-        const SQL = `INSERT INTO appUsers 
-        (username, firstname, lastname, classroomemail, discordid, fcclink, roleId, active, hashedpassword) VALUES 
-        (?, ?, ?, ?, ?, ?, ?, ?)`;
-        const hashedpassword = bcrypt.hash(password, 10);
-        const values = [
-            user.username ?? null,
-            user.firstname ?? null,
-            user.lastname ?? null,
-            user.classroomemail ?? null,
-            user.discordid ?? null,
-            user.fcclink ?? null,
-            user.roleId ?? null,
-            user.active ?? null,
-            hashedpassword
-        ];
-        return await DatabaseService.execute(SQL, values);
+        return data;
     }
-    static async editUserData(user: User, password?: string): Promise<boolean> {
+    static async editUserData(user: User, password?: string): Promise<Handle<any>> {
         const terms:string[] = [];
         const values:any[] = [];
-        if (!user.id){return false;}
+        if (!user.id){return {data:null,err:true,msg:"can't edit user without id."};}
         if (password){
             terms.push(" hashedpassword = ? ");
-            values.push(bcrypt.hash(password, 10));
+            values.push( await bcrypt.hash(password, 10));
         }
         if (user.username){
             terms.push(" username = ? ");
@@ -247,6 +265,18 @@ export class UserService {
         if (user.classroomemail){
             terms.push(" classroomemail = ? ");
             values.push(user.classroomemail);
+        }
+        if (user.primaryemail){
+            terms.push(" primaryemail = ? ");
+            values.push(user.primaryemail);
+        }
+        if (user.clockifyemail){
+            terms.push(" clockifyemail = ? ");
+            values.push(user.clockifyemail);
+        }
+        if (user.primaryphone){
+            terms.push(" primaryphone = ? ");
+            values.push(user.primaryphone);
         }
         if (user.discordid){
             terms.push(" discordid = ? ");
@@ -265,8 +295,7 @@ export class UserService {
             values.push(user.active);
         }
         const SQL = `UPDATE appUsers SET ${terms.join(', ')} WHERE id = ?`;
-        await DatabaseService.execute(SQL,[...values,user.id]);
-        return true;
+        return await DatabaseService.execute(SQL,[...values,user.id]);
     }
     // deleters
     static async deleteItemById(id: number, itemType: string): Promise<boolean> {
@@ -286,5 +315,32 @@ export class UserService {
         }
         await DatabaseService.execute(`DELETE FROM ${table} WHERE id = ?`,[id]);
         return true;
+    }
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~ router methods ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    static async editUser(ctx:Koa.Context){
+        console.log("editUser entered")
+        let res: Handle<any> = {
+            data:null,
+            err:true,
+            msg:"Can't edit the provided user with your credentials"
+        };
+        try{
+            if (UserService.canAccess(ctx.user.id, ctx.params.id, false)){
+                const userInfo: any = ctx.request.body;
+                userInfo.id = ctx.params.id;
+                res = await UserService.editUserData(userInfo, userInfo.password ?? undefined);
+                // console.log('res',res.data);
+                res.data = Boolean(res.data.changedRows);
+            }
+        } catch (err){
+            res.data = null;
+            res.err = true;
+            res.msg = err.message;
+        } finally {
+            console.log("edituser returning.", JSON.stringify(res));
+            ctx.body = res;
+            return res;
+        }
     }
 }

@@ -1,6 +1,7 @@
 import * as mysql from 'mysql2/promise';
 import { Handle } from '../common/types';
 import * as dotenv from 'dotenv';
+import moment = require('moment');
 dotenv.config();
 // provide a service to get a configured database connection.
 export class DatabaseService {
@@ -26,7 +27,7 @@ export class DatabaseService {
         let result: Handle<any> = {data:null,err:false,msg:null};
         try{
             const res = await db.query(SQL,DATA);
-            result.data = res;
+            result.data = (res.length == 2) ? res[0]: res;
             await db.commit();
         }catch(err){
             result.err = true;

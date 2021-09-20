@@ -30,13 +30,25 @@ export class ContentService {
         return result;
     }
 
+    static async getCohorts(ctx?: Koa.Context): Promise<Handle<any>>{
+        const data = await DatabaseService.execute(`SELECT id from appCohorts`, undefined);
+        // console.log('yeeet',data);
+        if (ctx) ctx.body = data;
+        return data;
+    }
     static async getCohortPeople(ctx: Koa.Context):Promise<Handle<any>>{
-        return DatabaseService.execute(`
+        const data = await DatabaseService.execute(`
             SELECT A.id as id, A.username as username, A.firstname as firstname, A.lastname as lastname, A.discordid as discordid, A.fcclink as fcclink, A.active as active,
-            U.cohort as cohort, U.id as cohortid, CR.title as cohortrole, AR.title as userrole
-                from appUsers A left join appUserRoles U on A.id = U.userid 
-                left join appRoles CR on U.roleid = CR.id left join appRoles AR on A.roleid = AR.id
-            where U.cohort = ?)`,[ctx.params.cohort]);
+            U.cohortid as cohortid, 
+            CR.title as cohortrole, 
+            AR.title as userrole
+            from appUsers A 
+                left join appUserRoles U on A.id = U.userid 
+                left join appRoles CR on U.roleid = CR.id 
+                left join appRoles AR on A.roleid = AR.id
+            where U.cohortid = :cid`,{cid:ctx.params.cohortid});
+        if (ctx) ctx.body = data;
+        return data;
     }
 
     static async getCohortCategorySubmissions(ctx: Koa.Context): Promise<Handle<any>> {
@@ -55,7 +67,7 @@ export class ContentService {
                 LEFT JOIN appUserRoles UR on S.userid = UR.userid
                 LEFT JOIN appAssignments ASNN on S.assignmentid = ASNN.id
                 WHERE UR.roleid <= 2 AND ASNN.moduleid = ? AND UR.cohortid = ?
-                `,[ctx.params.category, ctx.params.cohort]);
+                `,[ctx.params.category, ctx.params.cohortid]);
             } else {
                 return await DatabaseService.execute(`
                 SELECT S.id as submissionid, S.userid as userid, U.firstname as firstname, U.lastname as lastname,
@@ -64,7 +76,7 @@ export class ContentService {
                 LEFT JOIN appUserRoles UR on S.userid = UR.userid
                 LEFT JOIN appAssignments ASNN on S.assignmentid = ASNN.id
                 WHERE UR.roleid <= 2 AND ASNN.moduleid = ? AND UR.cohortid = ? AND S.userid = ?
-                `,[ctx.params.category, ctx.params.cohort, ctx.user.id]);
+                `,[ctx.params.category, ctx.params.cohortid, ctx.user.id]);
             }
 
         } catch (err){
@@ -76,25 +88,37 @@ export class ContentService {
     }
 
     static async getCohortSchedule(ctx: Koa.Context): Promise<Handle<any>>{
-        return await DatabaseService.execute(`
+        const data = await DatabaseService.execute(`
             SELECT * from appCohortSchedules where cohortid = ?
-        `,[ctx.params.cohort]);
+        `,[ctx.params.cohortid]);
+        ctx.body = data;
+        console.log(data);
+        return data;
     }
 
     static async getCohortTimeSheets(ctx: Koa.Context): Promise<Handle<any>>{
+        let result =null;
         try{
-            const [[role]] = (await DatabaseService.execute(`select * from appUserRoles where userid = ? and cohort = ?`,[ctx.user.id, ctx.params.cohort])).data;
-            const hasClassAccess = (role && role.roleid && role.roleid >= 3);
+            console.log('gettimesheet...',ctx.user.id, ctx.params.cohortid, ctx.user.roleid);
+            let hasClassAccess = false;
             const hasSiteAccess = (ctx.user.roleid >= 3);
+            console.log('ctx.roleid',ctx.user.roleid);
+            const {data:results} = await DatabaseService.execute(`select * from appUserRoles where userid = ? and cohortid = ?`,[ctx.user.id, ctx.params.cohortid]);
+            if (results){
+                const [role] = results;
+                hasClassAccess = (role && role.roleid && role.roleid >= 3);
+            }
             if (hasSiteAccess || hasClassAccess){
-                return await DatabaseService.execute(`SELECT * FROM appTimeEntries T where userid in (SELECT userid from appUserRoles where cohort = ?)`,[ctx.params.cohort]);
+                result =  await DatabaseService.execute(`SELECT * FROM appTimeEntries T where userid in (SELECT userid from appUserRoles where cohortid = ?)`,[ctx.params.cohortid]);
             } else {
-                return await DatabaseService.execute(`SELECT * FROM appTimeEntries T where userid = ?`,[ctx.user.id]);
+                result = await DatabaseService.execute(`SELECT * FROM appTimeEntries T where userid = ?`,[ctx.user.id]);
             }
         } catch (err){
             console.log(err);
             throw err;
         }
+        if (ctx) ctx.body = result;
+        return result
     }
 
     static async getUserSubmissions(ctx: Koa.Context): Promise<Handle<any>>{

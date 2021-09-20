@@ -83,14 +83,15 @@ router.delete('/assignments/:id', async (ctx) => {
     throw new Error('User does not have delete permissions on assignments');
 });
 // submissions are different, deleteContent handled deletions, but we need reading and posting
-router.get('submissions/user/:id', ContentService.getUserSubmissions);
-router.post('submissions/', ContentService.createUserSubmission);
+router.get('/submissions/user/:id', ContentService.getUserSubmissions);
+router.post('/submissions/', ContentService.createUserSubmission);
 
 // but lets look at the cohort view, which can have people viewed, assignments (view by category), schedule, and time entries
-router.get('/cohorts/:cohort/people', ContentService.getCohortPeople);
-router.get('/cohorts/:cohort/category/:category/submissions', ContentService.getCohortCategorySubmissions);
-router.get('/cohorts/:cohort/schedule', ContentService.getCohortSchedule);
-router.get('/cohorts/:cohort/timeEntries', ContentService.getCohortTimeSheets);
+router.get('/cohorts/', ContentService.getCohorts)
+router.get('/cohorts/:cohortid/people/', ContentService.getCohortPeople);
+router.get('/cohorts/:cohortid/category/:category/submissions', ContentService.getCohortCategorySubmissions);
+router.get('/cohorts/:cohortid/schedule', ContentService.getCohortSchedule);
+router.get('/cohorts/:cohortid/timeEntries/', ContentService.getCohortTimeSheets);
 // assignments in a course
 router.post('/assignments/', async (ctx) => {
     if (hasAdminAccess(ctx) && !isGuestUser(ctx)){

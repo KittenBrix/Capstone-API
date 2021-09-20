@@ -1,4 +1,3 @@
-import { DatabaseService } from "../services/db.service"
 import { GlobalConfig } from "./types"
 export const globalconfig: GlobalConfig = {
     headers: null,

@@ -6,6 +6,8 @@ import { DatabaseService } from './db.service';
 import { LoggingService } from './logging.service';
 import { globalconfig } from '../common/config';
 import { PoolConnection } from 'mysql2/promise';
+import { UserService } from './user.service';
+import { User } from '../common/types';
 export class AuthService {
 
     // generates a new token using login credentials.
@@ -19,7 +21,7 @@ export class AuthService {
             const [possibleUsers] = (await db.query(`
                 SELECT * from appUsers where username like :userName
             `, {userName}) as any[]);
-            console.log("possible users",possibleUsers, `username`,userName);
+            // console.log("possible users",possibleUsers, `username`,userName);
             let user: any = null;
             msg = "Could not check database for user credentials"
             possibleUsers.forEach(async (element: any) => {
@@ -36,8 +38,8 @@ export class AuthService {
                 msg = "user not found"
                 throw new Error();
             }
-            const { id, username, firstname, lastname, roleid} = user;
-            const payload = { id, username, firstname, lastname, roleid};
+            const { id, username, firstname, lastname, roleId} = user;
+            const payload = { id, username, firstname, lastname, roleid:roleId};
             const token = jwt.sign(payload, process.env.JWT_SECRET,globalconfig.jwtConfig);
             await LoggingService.logEvent("appUser",String(payload.id),"User logged in to app via login.","Login");
             return {
@@ -53,16 +55,16 @@ export class AuthService {
         }
     }
     // generates a new token using an existing token.
-    static async getRefreshToken(ctx: Koa.Context): Promise<Handle<string|number>>{
-        let data: string|number = 400;
+    static async getRefreshToken(ctx: Koa.Context): Promise<Handle<any>>{
+        let data: any;
         let err = true;
         let msg = "invalid token";
         try{
             // verify token, then resign it, and return that token.
-            const tokenHandle = this.extractTokenFromCTX(ctx);
-            const user = await this.authenticate(tokenHandle.data.toString());
+            const tokenHandle = AuthService.extractTokenFromCTX(ctx);
+            const user = await AuthService.authenticate(tokenHandle.data.toString());
             if (user && user.id){
-                data = jwt.sign(user,process.env.JWT_SECRET,globalconfig.jwtConfig);
+                data = {token:jwt.sign(user,process.env.JWT_SECRET,globalconfig.jwtConfig)};
                 err = false;
                 msg = "Refreshed token";
             }
@@ -113,12 +115,14 @@ export class AuthService {
     // convert JWT to a user object. sets ctx.token. sets ctx.user
     static async verifyUserJWT(ctx: Koa.Context, next: CallableFunction): Promise<Handle<any>> {
         
-        const tokenHandle = this.extractTokenFromCTX(ctx);
+        const tokenHandle = AuthService.extractTokenFromCTX(ctx);
         ctx.token = tokenHandle.data.toString();
-        ctx.user = await this.authenticate(ctx.token);
+        ctx.user = await AuthService.authenticate(ctx.token);
+        // console.log('token data', JSON.stringify(ctx.user));
         if (ctx.user && ctx.user.id){
             return await next();
         } else {
+            console.log("user jwt not verified.")
             return {data:401, err:true, msg:tokenHandle.msg}
         }
     }
@@ -157,27 +161,14 @@ export class AuthService {
         if (!(username && firstname &&lastname && password)){
             return false;
         }
-        // hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
-        console.log(hashedPassword);
-        const db = await DatabaseService.getConnection();
-        const SQL = `INSERT into appUsers (username, hashedpassword, firstname, lastname, roleId ) VALUES
-        (:username, :hashedPassword, :firstname, :lastname, 1)`;
         try{
-            const result = await db.query(SQL,{
-                username,
-                hashedPassword,
-                firstname,
-                lastname
-            });
-            await db.commit();
-        }catch(err){
-            console.log("error creating a user");
-            throw err;
-        } finally {
-            await db.release();
+            const user:User = {username, firstname, lastname};
+            await UserService.addUserData(user, password);
+            return true;
+        } catch (err){
+            console.log('registerUser Err:', err);
+            return false;
         }
-        return true;
     }
 
 }

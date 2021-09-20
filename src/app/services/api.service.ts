@@ -13,14 +13,18 @@ export default class BaseService{
         }
     }
     static async HandleHandles(ctx: koa.Context, next: CallableFunction){
+        // console.log("HandleHandles")
         let data;
         try {
             data = await next();
-            if (data.err){
-                console.log("handlehandles",data);
+            data = data ?? ctx.body;
+            // console.log("handlehandles",data);
+            if (data && data.err){
                 ctx.body = {data: data.data, msg: data.msg, status: ctx.status ?? 500};
-            } else {
+            } else if (data && data.data){
                 ctx.body = data.data;
+            } else if (data){
+                ctx.body = data;
             }
             ctx.status = 200;
 
