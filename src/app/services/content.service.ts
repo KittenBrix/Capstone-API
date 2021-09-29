@@ -37,7 +37,20 @@ export class ContentService {
         return data;
     }
     static async getCohortPeople(ctx: Koa.Context):Promise<Handle<any>>{
-        const data = await DatabaseService.execute(`
+        let data;
+        if (+ctx.params.cohortid == 0){
+            data = await DatabaseService.execute(`
+            SELECT A.id as id, A.username as username, A.firstname as firstname, A.lastname as lastname, A.discordid as discordid, A.fcclink as fcclink, A.active as active,
+            U.cohortid as cohortid, 
+            CR.title as cohortrole, 
+            AR.title as userrole
+            from appUsers A 
+                left join appUserRoles U on A.id = U.userid 
+                left join appRoles CR on U.roleid = CR.id 
+                left join appRoles AR on A.roleid = AR.id
+            where U.cohortid is null`,undefined);
+        } else {
+            data = await DatabaseService.execute(`
             SELECT A.id as id, A.username as username, A.firstname as firstname, A.lastname as lastname, A.discordid as discordid, A.fcclink as fcclink, A.active as active,
             U.cohortid as cohortid, 
             CR.title as cohortrole, 
@@ -47,6 +60,7 @@ export class ContentService {
                 left join appRoles CR on U.roleid = CR.id 
                 left join appRoles AR on A.roleid = AR.id
             where U.cohortid = :cid`,{cid:ctx.params.cohortid});
+        }
         if (ctx) ctx.body = data;
         return data;
     }
@@ -84,6 +98,7 @@ export class ContentService {
             result.msg = err.message;
             result.err = true;
         }
+        ctx.body = result;
         return result;
     }
 
@@ -121,17 +136,17 @@ export class ContentService {
         return result
     }
 
-    static async getUserSubmissions(ctx: Koa.Context): Promise<Handle<any>>{
+    static async getUserSubmissions(ctx: Koa.Context): Promise<void>{
         // so check if this user can access the submissions requested for the user (ctx.params.id)
         if (UserService.canAccess(ctx.user.id, ctx.params.id, true)){
-            return DatabaseService.execute(`SELECT * from appSubmissions where userid = ?`, [ctx.params.id]);
+            ctx.body = await DatabaseService.execute(`SELECT * from appSubmissions where userid = ?`, [ctx.params.id]);
         }
     }
 
-    static async createUserSubmission(ctx: Koa.Context): Promise<Handle<any>> {
+    static async createUserSubmission(ctx: Koa.Context): Promise<void> {
         const body: any = ctx.request.body;
         if (UserService.canAccess(ctx.user.id, body.userid, false)){
-            return DatabaseService.insert('appSubmissions',body);
+            ctx.body = await DatabaseService.insert('appSubmissions',body);
         }
         throw new Error(`User with id ${ctx.user.id} can't create a submission on behalf of user with id ${body.userid}`);
     }

@@ -96,10 +96,13 @@ export class AuthService {
                 throw new Error("Username is in use. Request password reset?");
             }
             else {
-                const registrationSuccess = await AuthService.registerUser(ctx.request.body);
-                if (registrationSuccess){
+                const registrationSuccess: Handle<boolean> = await AuthService.registerUser(ctx.request.body);
+                console.log("regNewUser", JSON.stringify(registrationSuccess));
+                if (registrationSuccess.data == true){
+                    console.log("getting auth token for new user...");
                     result = await AuthService.getLoginToken(ctx);
                 } else {
+                    console.log("not successful");
                     throw new Error("Could not register this user.");
                 }
             }
@@ -156,19 +159,24 @@ export class AuthService {
     }
 
     //~~~~~~~~~~~~~~~~~~~~  Non CTX methods. these are not expecting the full context.
-    static async registerUser(packet:any): Promise<boolean>{
+    static async registerUser(packet:any): Promise<Handle<boolean>>{
+        const result: Handle<any> = {data:null, err:false, msg:''};
         const {username, firstname, lastname, password} = packet;
-        if (!(username && firstname &&lastname && password)){
-            return false;
-        }
-        try{
+        try {
+            if (!(username && firstname &&lastname && password)){
+                throw new Error("Not all required items were provided.");
+            }
             const user:User = {username, firstname, lastname};
-            await UserService.addUserData(user, password);
-            return true;
+            const data = await UserService.addUserData(user, password);
+            result.data = !!data.data;
+            result.err = data.err;
+            result.msg = data.msg;
         } catch (err){
-            console.log('registerUser Err:', err);
-            return false;
+            result.data = err;
+            result.err = true;
+            result.msg = err.message;
         }
+        return result;
     }
 
 }

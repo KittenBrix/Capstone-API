@@ -17,6 +17,9 @@ router.get('/:id/emails/', async (ctx)=>{ await UserService.readContent(ctx,[`SE
 router.get('/:id/roles/', async (ctx)=>{ await UserService.readContent(ctx,[`SELECT * FROM appUserRoles where userid = ?`],[[ctx.params.id]]);});
 router.get('/:id/submissions/', async (ctx)=>{ await UserService.readContent(ctx,[`SELECT * FROM appSubmissions where userid = ?`],[[ctx.params.id]]);});
 router.get('/:id/timeentries/', async (ctx)=>{ await UserService.readContent(ctx,[`SELECT * FROM appTimeEntries where userid = ?`],[[ctx.params.id]]);});
+router.get('/:id/dashboard/', async (ctx) =>{ await UserService.getDashContent(ctx)});
+router.get('/:id/dashboard/upcoming/', async (ctx) =>{ await UserService.getUpcomingContent(ctx)});
+router.get('/:id/dashboard/remaining/', async (ctx) =>{ await UserService.getRemainingAssignmentContent(ctx)});
 // add stuff (Note, anyone can add an item for anyone else technically. we aren't preventing access.)
 router.post('/:id/phones/', async (ctx) => { await UserService.postContent(ctx,'phone')});
 router.post('/:id/emails/', async (ctx) => { await UserService.postContent(ctx,'email')});

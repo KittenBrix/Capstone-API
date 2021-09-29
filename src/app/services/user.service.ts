@@ -2,6 +2,7 @@ import { Email, Handle, Phone, Roles, Submission, User } from "../common/types";
 import { DatabaseService } from "./db.service";
 import * as Koa from 'koa';
 import * as bcrypt from 'bcrypt';
+import moment = require("moment");
 
 // responsible for user settings and things like that.
 export class UserService {
@@ -10,10 +11,11 @@ export class UserService {
         if (accessorId == userId) return true;  // you can always read/alter yourself.
         const editor = (await DatabaseService.execute(`SELECT * from appUser where id = ?`,[accessorId])).data;
         const user = (await DatabaseService.execute(`SELECT * from appUser where id = ?`,[userId])).data;
-        const {roleId} = editor.roleId ?? 0;
+        const roleId = (editor ? editor.roleId: null) ?? 0;
+        const userRole = (user ? user.roleId : 0) ?? 0;
         if (readOnly){
             //read requests
-            if (roleId > user.roleId) return true;  // if your site rank is higher than the individual, you can read it
+            if (roleId > userRole) return true;  // if your site rank is higher than the individual, you can read it
             // now if they have a lower role than you in a cohort, return true as well.
             try{
                 const SQL1 = `SELECT roleid, cohortid FROM appUserRoles where userid = ?`;
@@ -32,7 +34,7 @@ export class UserService {
         } else {
             // write request
             if (roleId % 2 == 1) return false;      // guests can't write
-            if (roleId >= 5 && roleId > user.roleId) return true;   //if you're admin+, and you outrank the individual, you can alter it.
+            if (roleId >= 5 && roleId > userRole) return true;   //if you're admin+, and you outrank the individual, you can alter it.
             try{
                 // if you're a teacher, you can alter anything belonging to one of your students.
                 const SQL1 = `SELECT cohort FROM appUserRoles where userid = ? and roleid in (4,6,8)`;
@@ -87,6 +89,118 @@ export class UserService {
         ctx.body = result;
         console.log('~~~~~~~~~~~~~~~\n',SQLLIST,result,'\n~~~~~~~~~~~~~~`');
     }
+
+    static async readDashContent(id: number){
+        const readDate = moment().add(-1,'weeks').format('YYYY-MM-DD hh:mm:ss');
+        const data =  await DatabaseService.execute(`SELECT id, message, dateUpdated FROM appLog where entityid = :id and dateUpdated >= :readDate`, {id, readDate});
+        return data;
+        // return await DatabaseService.execute(`SELECT id, message, dateUpdated FROM appLog where entityid = :id and dateupdated > :readDate`, {id, readDate});
+    }
+
+    static async readUpcomingContent(id: number){
+        const data: any[] = [];
+        // const schedules: any[] = [];
+        const roles = (await DatabaseService.execute(`SELECT * from appUserRoles where userid= :id`,{id})).data;
+        const cohorts = roles.map((el:any)=>{
+            return el.cohortid;
+        });
+        console.log('cohorts', cohorts.join(', '));
+        const terms = [];
+        for (const term of cohorts){terms.push('?');}
+        const schedules = (await DatabaseService.execute(`SELECT * from appCohortSchedules where cohortid in (${terms.join(', ')})`,cohorts)).data;
+        console.log('schedules', schedules);
+        
+        const lastWeek = moment().startOf('day');
+        const nextWeek = moment().add(1,'weeks').endOf('day');
+        for (const schedule of schedules){
+            const {description} = schedule;
+            const start = moment(schedule.start);
+            const hours = start.format('hh:mmA');
+            const reps = Number(schedule.repeats ?? '0');
+            if (reps){
+              // propogate repeats
+              const daysbetween = Math.abs(lastWeek.diff(start.startOf('day'),'days'));
+              const numberPrevious = Math.floor(daysbetween/reps);
+              let check = moment(start).add(numberPrevious*reps,'days');
+              while (nextWeek.isSameOrAfter(check,'days')){
+                if (lastWeek.isSameOrBefore(check,'days')){
+                  data.push({
+                    time: moment(check.utc(true)),
+                    description
+                  });
+                }
+                check = check.add(reps,'days');
+              }
+            } else {
+                if (start.isSameOrAfter(lastWeek) && start.isSameOrBefore(nextWeek)){
+                  data.push({
+                    time: moment(start.utc(true)),
+                    description
+                  });
+                }
+              }
+        }
+        console.log('upcoming', data);
+        data.sort((el2,el1)=>{
+            const before = el1.time.isSameOrBefore(el2.time);
+            const after = el1.time.isSameOrAfter(el2.time);
+            return Number(before) - Number(after);
+        })
+        return data;
+    }
+
+    static async readRemainingAssignmentContent(id: number){
+        // assignments left (some turned in, some not)
+        const SQL = `SELECT
+        module.id as modid, module.name as modulename,
+        asn.id as assignmentid, asn.name as assignmentname,
+        sub.id as submissionid, sub.grade as grade, sub.pass as pass, sub.text as content
+        FROM appAssignmentCategory module
+        LEFT OUTER JOIN appAssignments asn on module.id = asn.moduleid
+        LEFT OUTER JOIN appSubmissions sub on sub.assignmentid = asn.id and sub.userid = :id
+        ORDER BY module.id, asn.id, sub.id;`;
+        // assignments left to be graded.
+        const roles = (await DatabaseService.execute(`SELECT * from appUserRoles where userid= :id`,{id})).data;
+        const student: number[] = [];
+        const teacher: number[] = [];
+        const remaining: any[] = [];
+        const toGrade: any[] = [];
+        for (const role of roles){
+            if (role.roleid < 3){
+                student.push(+role.cohortid);
+            } else {
+                teacher.push(+role.cohortid);
+            }
+        }
+        if (student.length){
+            const assignments = (await DatabaseService.execute(SQL,{id})).data;
+            console.log('assignments', assignments);
+            console.log('assigned ',Object.keys(assignments[0]));
+            remaining.push(...assignments.map((el:any)=>{
+                return el;
+            }));
+        }
+        if (teacher.length){
+            const SQL2 = `SELECT
+            module.id as modid, module.name as modulename,
+            asn.id as assignmentid, asn.name as assignmentname,
+            sub.id as submissionid, users.id as userid, users.username as username
+            FROM appAssignmentCategory module
+            LEFT JOIN appAssignments asn on module.id = asn.moduleid
+            INNER JOIN appSubmissions sub on sub.assignmentid = asn.id
+            INNER JOIN appUsers users on users.id = sub.userid
+            WHERE sub.userid in (SELECT distinct userid from appUserRoles where roleid < 3 and cohortid in (213, 214))
+            AND (sub.grade is null or sub.grade = 0)
+            ORDER BY module.id, asn.id, sub.id;`;
+            const assignments = (await DatabaseService.execute(SQL2,undefined)).data;
+            console.log('grade needed: ',Object.keys(assignments[10]));
+            toGrade.push(...assignments.map((el:any)=>{
+                return el;
+            }));
+        }
+        return {toGrade, remaining};
+    }
+
     // post content CTX methods for a router
     static async postContent(ctx: Koa.Context, typing: string): Promise<void>{
         const body:any = ctx.request.body;
@@ -145,6 +259,7 @@ export class UserService {
         }
         try {
             await DatabaseService.execute(SQL, inputs);
+            await DatabaseService.execute(`INSERT INTO AppLog (entityid, message, eventtype) VALUES (?,?,?)`,[phone.userid, `Phone ${phone.phone} added to account`, 'Create']);
             return true;
         } catch(err){
             console.log(err);
@@ -167,6 +282,7 @@ export class UserService {
         }
         try {
             await DatabaseService.execute(SQL, inputs);
+            await DatabaseService.execute(`INSERT INTO AppLog (entityid, message, eventtype) VALUES (?,?,?)`,[email.userid, `Email ${email.email} added to account`, 'Create']);
             return true;
         } catch(err){
             console.log(err);
@@ -189,6 +305,7 @@ export class UserService {
         }
         try {
             await DatabaseService.execute(SQL, inputs);
+            await DatabaseService.execute(`INSERT INTO AppLog (entityid, message, eventtype) VALUES (?,?,?)`,[role.userid, `Role ${role.roleid} added to account`, 'Create']);
             return true;
         } catch(err){
             console.log(err);
@@ -202,14 +319,17 @@ export class UserService {
             return false;
         }
         if (sub.id){
-            SQL = `UPDATE appUserRoles set assignmentid = ?, text = ?, userid = ? WHERE id = ? `;
+            SQL = `UPDATE appSubmissions set assignmentid = ?, text = ?, userid = ? WHERE id = ? `;
             inputs.push(sub.assignmentid, sub.text, sub.userid, sub.id);
         } else {
-            SQL = `INSERT INTO appUserRoles (assignmentid, text, userid) VALUES (?,?,?)`;
+            SQL = `INSERT INTO appSubmissions (assignmentid, text, userid) VALUES (?,?,?)`;
             inputs.push(sub.assignmentid, sub.text, sub.userid);
         }
         try {
             await DatabaseService.execute(SQL, inputs);
+            await DatabaseService.execute(`
+                INSERT INTO AppLog (entityid, message, eventtype) VALUES (?,?,?)`,
+                [sub.userid, `Submission updated for assignment: ${sub.assignmentid}`, 'Create']);
             return true;
         } catch(err){
             console.log(err);
@@ -223,22 +343,22 @@ export class UserService {
         } else {
             const SQL = `INSERT INTO appUsers 
             (username, firstname, lastname, classroomemail, primaryemail, clockifyemail, primaryphone, discordid, fcclink, roleId, active, hashedpassword) VALUES 
-            (?, ?, ?, ?, ?, ?, ?, ?)`;
-            const hashedpassword = bcrypt.hash(password, 10);
-            const values = [
-                user.username ?? null,
-                user.firstname ?? null,
-                user.lastname ?? null,
-                user.classroomemail ?? null,
-                user.primaryemail ?? null,
-                user.clockifyemail ?? null,
-                user.primaryphone ?? null,
-                user.discordid ?? null,
-                user.fcclink ?? null,
-                user.roleId ?? null,
-                user.active ?? null,
-                hashedpassword
-            ];
+            (:uname, :fname, :lname, :cemail, :pemail, :lemail, :pphone, :did, :fcc, :rid, :act, :pass)`;
+            const hashedpassword = await bcrypt.hash(password, 10);
+            const values = {
+                uname: user.username ?? null,
+                fname: user.firstname ?? null,
+                lname: user.lastname ?? null,
+                cemail: user.classroomemail ?? null,
+                pemail: user.primaryemail ?? null,
+                lemail: user.clockifyemail ?? null,
+                pphone: user.primaryphone ?? null,
+                did: user.discordid ?? null,
+                fcc: user.fcclink ?? null,
+                rid: user.roleId ?? 2,
+                act: user.active ?? 1,
+                pass: hashedpassword
+            };
             data = await DatabaseService.execute(SQL, values);
         }
         return data;
@@ -296,6 +416,7 @@ export class UserService {
             values.push(user.active);
         }
         const SQL = `UPDATE appUsers SET ${terms.join(', ')} WHERE id = ?`;
+        await DatabaseService.execute(`INSERT INTO AppLog (entityid, message, eventtype) VALUES (?,?,?)`,[user.id, `${terms.length} values altered on the user record.`, 'Update']);
         return await DatabaseService.execute(SQL,[...values,user.id]);
     }
     // deleters
@@ -343,5 +464,41 @@ export class UserService {
             ctx.body = res;
             return res;
         }
+    }
+
+    static async getDashContent(ctx:Koa.Context){
+        const user = ctx.user;
+        const target = await (await DatabaseService.execute(`SELECT * from appUsers where id = ?`,[ctx.params.id])).data[0];
+        ctx.body = {data:null,err:true,msg:"not found"};
+        if (!!user && !!target && this.canAccess(user.id, target.id, true)){
+            const tid: number = parseInt(target.id);
+            console.log('tid',tid);
+            ctx.body = await UserService.readDashContent(tid);
+        }
+        return ctx.body;
+    }
+
+    static async getUpcomingContent(ctx: Koa.Context){
+        const user = ctx.user;
+        const target = await (await DatabaseService.execute(`SELECT * from appUsers where id = ?`,[ctx.params.id])).data[0];
+        ctx.body = {data:null,err:true,msg:"not found"};
+        if (!!user && !!target && this.canAccess(user.id, target.id, true)){
+            const tid: number = parseInt(target.id);
+            console.log('tid',tid);
+            ctx.body = await UserService.readUpcomingContent(tid);
+        }
+        return ctx.body;
+    }
+
+    static async getRemainingAssignmentContent(ctx: Koa.Context){
+        const user = ctx.user;
+        const target = await (await DatabaseService.execute(`SELECT * from appUsers where id = ?`,[ctx.params.id])).data[0];
+        ctx.body = {data:null,err:true,msg:"not found"};
+        if (!!user && !!target && this.canAccess(user.id, target.id, true)){
+            const tid: number = parseInt(target.id);
+            console.log('tid',tid);
+            ctx.body = await UserService.readRemainingAssignmentContent(tid);
+        }
+        return ctx.body;
     }
 }
