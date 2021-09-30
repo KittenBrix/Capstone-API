@@ -66,39 +66,52 @@ export class ContentService {
     }
 
     static async getCohortCategorySubmissions(ctx: Koa.Context): Promise<Handle<any>> {
-        const result: Handle<any> = {data:null, err:true, msg:"couldn't get data. possibly a permissions issue"};
+        let result: Handle<any> = {data:null, err:true, msg:"couldn't get data. possibly a permissions issue"};
         // if you have teacher+ roles on the cohort, or admin access, you can read the submissions for the whole cohort.
         // otherwise you can only view your own submissions (if you have any)
         try {
-            const [[role]] = (await DatabaseService.execute(`select * from appUserRoles where userid = ? and cohort = ?`,[ctx.user.id, ctx.params.cohort])).data;
+            console.log(1)
+            const role = (await DatabaseService.execute(`select * from appUserRoles where userid = ? and cohort = ?`,[ctx.user.id, ctx.params.cohortid])).data;
+            console.log(2)
             const hasClassAccess = (role && role.roleid && role.roleid >= 3);
+            console.log(3)
             const hasSiteAccess = (ctx.user.roleid >= 3);
+            console.log(4)
             if (hasSiteAccess || hasClassAccess){
-                return await DatabaseService.execute(`
-                SELECT S.id as submissionid, S.userid as userid, U.firstname as firstname, U.lastname as lastname,
-                    S.assignmentid as assignmentid, S.text as text, S.grade as grade, S.pass as pass
-                FROM appSubmissions S LEFT JOIN appUsers U on S.userid = U.id
-                LEFT JOIN appUserRoles UR on S.userid = UR.userid
-                LEFT JOIN appAssignments ASNN on S.assignmentid = ASNN.id
-                WHERE UR.roleid <= 2 AND ASNN.moduleid = ? AND UR.cohortid = ?
-                `,[ctx.params.category, ctx.params.cohortid]);
+                console.log(5)
+                const userids = (await DatabaseService.execute(`SELECT distinct userid from appUserRoles where roleid < 3 and cohortid = ?`,[ctx.params.cohortid])).data.map((el: any)=>{
+                    return el.userid;
+                });
+                console.log(userids);
+                const data:any = {}; //data is object. assignment ids are keys. each member is array that is N big, where N is number of people in userids.
+                const {data: assns} = await DatabaseService.execute(`SELECT id from appAssignments where moduleid = ? AND inactive = false`,[ctx.params.category]);
+                for (const an of assns){
+                    const key = `${an.id}`;
+                    data[key] = (await DatabaseService.execute(`
+                        SELECT *, S.id as sid, U.id as userid FROM appUsers U 
+                        LEFT JOIN appSubmissions S 
+                            ON S.userid = U.id AND S.assignmentid = ? 
+                        WHERE U.id in ( ${userids.join(', ')} )
+                        ORDER BY grade desc
+                    `,[an.id])).data;
+                }
+                console.log(data);
+                result.data = data;
+                result.err = false;
+                result.msg = `Cohort ${ctx.params.cohortid} completion in Category "${ctx.params.category}"`;
+                console.log(6)
             } else {
-                return await DatabaseService.execute(`
-                SELECT S.id as submissionid, S.userid as userid, U.firstname as firstname, U.lastname as lastname,
-                    S.assignmentid as assignmentid, S.text as text, S.grade as grade, S.pass as pass
-                FROM appSubmissions S LEFT JOIN appUsers U on S.userid = U.id
-                LEFT JOIN appUserRoles UR on S.userid = UR.userid
-                LEFT JOIN appAssignments ASNN on S.assignmentid = ASNN.id
-                WHERE UR.roleid <= 2 AND ASNN.moduleid = ? AND UR.cohortid = ? AND S.userid = ?
-                `,[ctx.params.category, ctx.params.cohortid, ctx.user.id]);
+                throw new Error("You don't have permission to view this cohort's submissions for this module.")
             }
-
+            console.log(9)
         } catch (err){
+            console.log(10)
             result.data = err;
             result.msg = err.message;
             result.err = true;
         }
         ctx.body = result;
+        console.log(11)
         return result;
     }
 

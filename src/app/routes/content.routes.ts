@@ -15,74 +15,74 @@ router.del('/submissions/:itemid', async (ctx) => {ctx.body = await ContentServi
 // now stuff for categories.
 router.get('/categories/', async (ctx) => {ctx.body = await DatabaseService.execute(`SELECT * from appAssignmentCategory`,undefined)});
 router.get('/categories/:id', async (ctx) => {ctx.body = await DatabaseService.execute(`SELECT * from appAssignmentCategory where id = ?`,[ctx.params.id])});
-router.get('/categories/:id/assignments', async (ctx) => {ctx.body = await DatabaseService.execute(`SELECT * from appAssignments where moduleid = ?`,[ctx.params.id])});
-router.post('/categories/', async (ctx) => {
-    if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
-        const keys = [];
-        const values = [];
-        const Qs = [];
-        for (const key of Object.keys(ctx.request.body)){
-            keys.push(key);
-            values.push((<any>ctx.request.body)[key]);
-            Qs.push('?');
-        }
-        ctx.body = await DatabaseService.execute(`INSERT into appAssignmentCategory (${Qs.join(', ')}) VALUES (${Qs.join(', ')})`,[...keys, ...values]);
-    }
-    throw new Error("user does not have permission to post or alter categories.");
-});
-router.post('/assignments/categories/:id', async (ctx) => {
-    if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
-        const sets = [];
-        const values = [];
-        for (const key of Object.keys(ctx.request.body)){
-            sets.push(`${key} = ?`)
-            values.push((<any>ctx.request.body)[key]);
-        }
-        ctx.body = await DatabaseService.execute(`UPDATE appAssignmentCategory set ${sets.join(', ')} where id = ?`,[...values, ctx.params.id]);
-    }
-    throw new Error("user does not have permission to post or alter categories.");
-});
-router.delete('/assignments/categories/:id', async (ctx) => {
-    if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
-        ctx.body = await DatabaseService.execute(`DELETE FROM appAssignmentCategory where id = ?`, [ctx.params.id]);
-    }
-    throw new Error('User does not have delete permissions on categories');
-});
+router.get('/categories/:id/assignments/', async (ctx) => {ctx.body = await DatabaseService.execute(`SELECT * from appAssignments where moduleid = ? AND inactive = false`,[ctx.params.id])});
+// router.post('/categories/', async (ctx) => {
+//     if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
+//         const keys = [];
+//         const values = [];
+//         const Qs = [];
+//         for (const key of Object.keys(ctx.request.body)){
+//             keys.push(key);
+//             values.push((<any>ctx.request.body)[key]);
+//             Qs.push('?');
+//         }
+//         ctx.body = await DatabaseService.execute(`INSERT into appAssignmentCategory (${Qs.join(', ')}) VALUES (${Qs.join(', ')})`,[...keys, ...values]);
+//     }
+//     throw new Error("user does not have permission to post or alter categories.");
+// });
+// router.post('/assignments/categories/:id', async (ctx) => {
+//     if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
+//         const sets = [];
+//         const values = [];
+//         for (const key of Object.keys(ctx.request.body)){
+//             sets.push(`${key} = ?`)
+//             values.push((<any>ctx.request.body)[key]);
+//         }
+//         ctx.body = await DatabaseService.execute(`UPDATE appAssignmentCategory set ${sets.join(', ')} where id = ?`,[...values, ctx.params.id]);
+//     }
+//     throw new Error("user does not have permission to post or alter categories.");
+// });
+// router.delete('/assignments/categories/:id', async (ctx) => {
+//     if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
+//         ctx.body = await DatabaseService.execute(`DELETE FROM appAssignmentCategory where id = ?`, [ctx.params.id]);
+//     }
+//     throw new Error('User does not have delete permissions on categories');
+// });
 // now stuff for assignments themselves.
-router.get('/assignments/', async (ctx) => {ctx.body = await DatabaseService.execute(`SELECT * from appAssignments`,undefined)});
+router.get('/assignments/', async (ctx) => {ctx.body = await DatabaseService.execute(`SELECT * from appAssignments where inactive = false`,undefined)});
 router.get('/assignments/:id', async (ctx) => {ctx.body = await DatabaseService.execute(`SELECT * from appAssignments where id = ?`,[ctx.params.id])});
-router.post('/assignments/', async (ctx) => {
-    if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
-        const keys = [];
-        const values = [];
-        const Qs = [];
-        for (const key of Object.keys(ctx.request.body)){
-            keys.push(key);
-            values.push((<any>ctx.request.body)[key]);
-            Qs.push('?');
-        }
-        ctx.body = await DatabaseService.execute(`INSERT into appAssignments (${Qs.join(', ')}) VALUES (${Qs.join(', ')})`,[...keys, ...values]);
-    }
-    throw new Error("user does not have permission to post or alter assignments.");
-});
-router.post('/assignments/:id', async (ctx) => {
-    if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
-        const sets = [];
-        const values = [];
-        for (const key of Object.keys(ctx.request.body)){
-            sets.push(`${key} = ?`)
-            values.push((<any>ctx.request.body)[key]);
-        }
-        ctx.body = await DatabaseService.execute(`UPDATE appAssignments set ${sets.join(', ')} where id = ?`,[...values, ctx.params.id]);
-    }
-    throw new Error("user does not have permission to post or alter assignments.");
-});
-router.delete('/assignments/:id', async (ctx) => {
-    if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
-        ctx.body = await DatabaseService.execute(`DELETE FROM appAssignmentCategory where id = ?`, [ctx.params.id]);
-    }
-    throw new Error('User does not have delete permissions on assignments');
-});
+// router.post('/assignments/', async (ctx) => {
+//     if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
+//         const keys = [];
+//         const values = [];
+//         const Qs = [];
+//         for (const key of Object.keys(ctx.request.body)){
+//             keys.push(key);
+//             values.push((<any>ctx.request.body)[key]);
+//             Qs.push('?');
+//         }
+//         ctx.body = await DatabaseService.execute(`INSERT into appAssignments (${Qs.join(', ')}) VALUES (${Qs.join(', ')})`,[...keys, ...values]);
+//     }
+//     throw new Error("user does not have permission to post or alter assignments.");
+// });
+// router.post('/assignments/:id', async (ctx) => {
+//     if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
+//         const sets = [];
+//         const values = [];
+//         for (const key of Object.keys(ctx.request.body)){
+//             sets.push(`${key} = ?`)
+//             values.push((<any>ctx.request.body)[key]);
+//         }
+//         ctx.body = await DatabaseService.execute(`UPDATE appAssignments set ${sets.join(', ')} where id = ?`,[...values, ctx.params.id]);
+//     }
+//     throw new Error("user does not have permission to post or alter assignments.");
+// });
+// router.delete('/assignments/:id', async (ctx) => {
+//     if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
+//         ctx.body = await DatabaseService.execute(`DELETE FROM appAssignmentCategory where id = ?`, [ctx.params.id]);
+//     }
+//     throw new Error('User does not have delete permissions on assignments');
+// });
 // submissions are different, deleteContent handled deletions, but we need reading and posting
 router.get('/submissions/user/:id', ContentService.getUserSubmissions);
 router.post('/submissions/', ContentService.createUserSubmission);
@@ -95,7 +95,7 @@ router.get('/cohorts/:cohortid/schedule', ContentService.getCohortSchedule);
 router.get('/cohorts/:cohortid/timeEntries/', ContentService.getCohortTimeSheets);
 // assignments in a course
 router.post('/assignments/', async (ctx) => {
-    if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
+    if ((await hasAdminAccess(ctx)) && !(await isGuestUser(ctx))){
         const keys = [];
         const values = [];
         const Qs = [];
@@ -104,12 +104,23 @@ router.post('/assignments/', async (ctx) => {
             values.push((<any>ctx.request.body)[key]);
             Qs.push('?');
         }
-        ctx.body = await DatabaseService.execute(`INSERT into appAssignments (${Qs.join(', ')}) VALUES (${Qs.join(', ')})`,[...keys, ...values]);
+        const SQL = `INSERT into appAssignments (${keys.join(', ')}) VALUES (${Qs.join(', ')})`;
+        console.log(SQL);
+        try {
+        ctx.body = await DatabaseService.execute(SQL,values);
+        } catch (err){
+            console.log(err);
+            console.log(err.message);
+        }
+    } else {
+        throw new Error("user does not have permission to post or alter assignments.");
     }
-    throw new Error("user does not have permission to post or alter assignments.");
 });
 router.post('/assignments/:id', async (ctx) => {
-    if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
+    const admin1 = await hasAdminAccess(ctx);
+    const admin2 = await isGuestUser(ctx);
+    console.log('admin:',admin1,' guest',admin2);
+    if (admin1 && !admin2){
         const sets = [];
         const values = [];
         for (const key of Object.keys(ctx.request.body)){
@@ -117,13 +128,15 @@ router.post('/assignments/:id', async (ctx) => {
             values.push((<any>ctx.request.body)[key]);
         }
         ctx.body = await DatabaseService.execute(`UPDATE appAssignments set ${sets.join(', ')} where id = ?`,[...values, ctx.params.id]);
+    }else{
+        throw new Error("user does not have permission to post or alter this assignment.");
     }
-    throw new Error("user does not have permission to post or alter assignments.");
 });
 router.delete('/assignments/:id', async (ctx) => {
-    if (hasAdminAccess(ctx) && !isGuestUser(ctx)){
-        ctx.body = await DatabaseService.execute(`DELETE FROM appAssignmentCategory where id = ?`, [ctx.params.id]);
+    if ((await hasAdminAccess(ctx)) && !(await isGuestUser(ctx))){
+        ctx.body = await DatabaseService.execute(`UPDATE appAssignments set inactive = true where id = ?`, [ctx.params.id]);
+    } else {
+        throw new Error('User does not have delete permissions on assignments');
     }
-    throw new Error('User does not have delete permissions on assignments');
 });
 export default router;
