@@ -105,7 +105,6 @@ router.post('/assignments/', async (ctx) => {
             Qs.push('?');
         }
         const SQL = `INSERT into appAssignments (${keys.join(', ')}) VALUES (${Qs.join(', ')})`;
-        console.log(SQL);
         try {
         ctx.body = await DatabaseService.execute(SQL,values);
         } catch (err){
@@ -119,7 +118,6 @@ router.post('/assignments/', async (ctx) => {
 router.post('/assignments/:id', async (ctx) => {
     const admin1 = await hasAdminAccess(ctx);
     const admin2 = await isGuestUser(ctx);
-    console.log('admin:',admin1,' guest',admin2);
     if (admin1 && !admin2){
         const sets = [];
         const values = [];

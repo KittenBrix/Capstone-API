@@ -21,7 +21,6 @@ export class AuthService {
             const [possibleUsers] = (await db.query(`
                 SELECT * from appUsers where username like :userName
             `, {userName}) as any[]);
-            // console.log("possible users",possibleUsers, `username`,userName);
             let user: any = null;
             msg = "Could not check database for user credentials"
             possibleUsers.forEach(async (element: any) => {
@@ -121,7 +120,6 @@ export class AuthService {
         const tokenHandle = AuthService.extractTokenFromCTX(ctx);
         ctx.token = tokenHandle.data.toString();
         ctx.user = await AuthService.authenticate(ctx.token);
-        // console.log('token data', JSON.stringify(ctx.user));
         if (ctx.user && ctx.user.id){
             return await next();
         } else {

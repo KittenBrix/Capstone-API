@@ -32,7 +32,6 @@ export class ContentService {
 
     static async getCohorts(ctx?: Koa.Context): Promise<Handle<any>>{
         const data = await DatabaseService.execute(`SELECT id from appCohorts`, undefined);
-        // console.log('yeeet',data);
         if (ctx) ctx.body = data;
         return data;
     }
@@ -70,19 +69,13 @@ export class ContentService {
         // if you have teacher+ roles on the cohort, or admin access, you can read the submissions for the whole cohort.
         // otherwise you can only view your own submissions (if you have any)
         try {
-            console.log(1)
-            const role = (await DatabaseService.execute(`select * from appUserRoles where userid = ? and cohort = ?`,[ctx.user.id, ctx.params.cohortid])).data;
-            console.log(2)
+            const role = (await DatabaseService.execute(`select * from appUserRoles where userid = ? and cohortid = ?`,[ctx.user.id, ctx.params.cohortid])).data;
             const hasClassAccess = (role && role.roleid && role.roleid >= 3);
-            console.log(3)
             const hasSiteAccess = (ctx.user.roleid >= 3);
-            console.log(4)
             if (hasSiteAccess || hasClassAccess){
-                console.log(5)
                 const userids = (await DatabaseService.execute(`SELECT distinct userid from appUserRoles where roleid < 3 and cohortid = ?`,[ctx.params.cohortid])).data.map((el: any)=>{
                     return el.userid;
                 });
-                console.log(userids);
                 const data:any = {}; //data is object. assignment ids are keys. each member is array that is N big, where N is number of people in userids.
                 const {data: assns} = await DatabaseService.execute(`SELECT id from appAssignments where moduleid = ? AND inactive = false`,[ctx.params.category]);
                 for (const an of assns){
@@ -95,23 +88,19 @@ export class ContentService {
                         ORDER BY grade desc
                     `,[an.id])).data;
                 }
-                console.log(data);
                 result.data = data;
                 result.err = false;
                 result.msg = `Cohort ${ctx.params.cohortid} completion in Category "${ctx.params.category}"`;
-                console.log(6)
             } else {
                 throw new Error("You don't have permission to view this cohort's submissions for this module.")
             }
-            console.log(9)
         } catch (err){
-            console.log(10)
+            console.log("CatSubsERR", err);
             result.data = err;
             result.msg = err.message;
             result.err = true;
         }
         ctx.body = result;
-        console.log(11)
         return result;
     }
 
@@ -120,17 +109,14 @@ export class ContentService {
             SELECT * from appCohortSchedules where cohortid = ?
         `,[ctx.params.cohortid]);
         ctx.body = data;
-        console.log(data);
         return data;
     }
 
     static async getCohortTimeSheets(ctx: Koa.Context): Promise<Handle<any>>{
         let result =null;
         try{
-            console.log('gettimesheet...',ctx.user.id, ctx.params.cohortid, ctx.user.roleid);
             let hasClassAccess = false;
             const hasSiteAccess = (ctx.user.roleid >= 3);
-            console.log('ctx.roleid',ctx.user.roleid);
             const {data:results} = await DatabaseService.execute(`select * from appUserRoles where userid = ? and cohortid = ?`,[ctx.user.id, ctx.params.cohortid]);
             if (results){
                 const [role] = results;
@@ -142,7 +128,7 @@ export class ContentService {
                 result = await DatabaseService.execute(`SELECT * FROM appTimeEntries T where userid = ?`,[ctx.user.id]);
             }
         } catch (err){
-            console.log(err);
+            console.log('cohortTimeSheetsERR',err);
             throw err;
         }
         if (ctx) ctx.body = result;

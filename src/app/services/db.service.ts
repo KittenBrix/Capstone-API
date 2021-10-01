@@ -12,7 +12,7 @@ export class DatabaseService {
         password: process.env.DB_PASSWORD,
         database: process.env.DB_DATABASE
     };
-    private static dbPool: mysql.Pool = mysql.createPool(DatabaseService.config);
+    public static dbPool: mysql.Pool = mysql.createPool(DatabaseService.config);
     static async getPool(): Promise<mysql.Pool>{
         return await this.dbPool;
     }
@@ -22,14 +22,18 @@ export class DatabaseService {
         return conn;
     }
 
-    static async execute(SQL:string, DATA:any):Promise<Handle<any>>{
+    static async execute(SQL:string, DATA:any, log:boolean = false):Promise<Handle<any>>{
         const db = await this.getConnection();
         let result: Handle<any> = {data:null,err:false,msg:null};
         try{
             const res = await db.query(SQL,DATA);
             result.data = (res.length == 2) ? res[0]: res;
-            await db.commit();
+            const res2 = await db.commit();
+            if (log){
+                console.log(SQL,res,res2);
+            }
         }catch(err){
+            console.log('DBERR', err);
             result.err = true;
             result.msg = err.message;
         }finally{
