@@ -15,27 +15,9 @@ and a few status checks:
 We also need the methods in discord to retrieve user's current online status
 also a time.service.ts to create timeentries from both discord and clockify records.
 
-Then we have authentication. I need to get Google OAuth2 working. A user must
-log in to my app and *then* log in to google single sign on. This binds their
-classroom email to the appUser, and also allows them to use those credentials
-to access coursework lists for their cohort from our DB (we find all class ids
-that they have access to. If they are a student appUser, they can see only assignment
-due dates and their own submission states plus a link to the assignment) If they
-are a teacher appUser, they get to see coursework for the class, plus students in it.
-if they are an admin appUser, they get to see everything my personal account could get.
-they only need to link once, from there, my application handles data displays.
-
-
-
-We still need to make JWTS work. like, logging in using name/pass, and also refresh tokens.
-refresh token needs finish. logging in works. refresh token finished. gotta test with insomnia.
-need to set routes.
-
-
-
 Still need Schema for FCC account achievements
 selector like #gatsby-focus-wrapper > div > div > div > div.container > div:nth-child(4) > div > table
 Make scraper for FCC. Scrape user's credentials. Scrape specific credentials.
 
-Google Classroom seems like too much work. I can't do that despite wanting to.
-I can do discord. I can do clockify. I can do FCC.
+Note: for capstone submission, discord and fcc services are disabled. we replace real user data with dummy data instead in an effort to protect user privacy.
+ 
